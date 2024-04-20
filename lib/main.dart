@@ -5,14 +5,23 @@ final lightColorScheme = ColorScheme.fromSeed(
   seedColor: Colors.white,
 );
 final darkColorScheme = ColorScheme.fromSeed(
+  brightness: Brightness.dark,
   seedColor: Colors.black,
 );
 final lightTheme = ThemeData.light().copyWith(
   colorScheme: lightColorScheme,
+  appBarTheme: const AppBarTheme().copyWith(
+    backgroundColor: lightColorScheme.background,
+    foregroundColor: lightColorScheme.onBackground,
+  ),
 );
 
 final darkTheme = ThemeData.dark().copyWith(
   colorScheme: darkColorScheme,
+  appBarTheme: const AppBarTheme().copyWith(
+    backgroundColor: Colors.black26,
+    foregroundColor: Colors.white,
+  ),
 );
 
 void main() {
@@ -29,6 +38,7 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: lightTheme,
       darkTheme: darkTheme,
+      themeMode: ThemeMode.dark,
       home: const GroceryListScreen(),
     );
   }
