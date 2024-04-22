@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
@@ -37,23 +38,26 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
         return;
       }
       _errorMessage = null;
-
-      final List<GroceryModel> groceryItems = [];
-      if (response != null) {
-        Map<String, dynamic> decodedResponse = json.decode(response.body);
-        for (final entry in decodedResponse.entries) {
-          final category = availavleCategories.entries.firstWhere((category) =>
-              category.value.name == entry.value['category_name']);
-          final GroceryModel model = GroceryModel(
-            id: entry.key,
-            name: entry.value['name'],
-            quantity: entry.value['quantity'],
-            category: category.value,
-          );
-          groceryItems.add(model);
-        }
+      if (response.body == 'null') {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
 
+      final List<GroceryModel> groceryItems = [];
+      Map<String, dynamic> decodedResponse = json.decode(response.body);
+      for (final entry in decodedResponse.entries) {
+        final category = availavleCategories.entries.firstWhere(
+            (category) => category.value.name == entry.value['category_name']);
+        final GroceryModel model = GroceryModel(
+          id: entry.key,
+          name: entry.value['name'],
+          quantity: entry.value['quantity'],
+          category: category.value,
+        );
+        groceryItems.add(model);
+      }
       setState(() {
         _isLoading = false;
         _groceryModelList = groceryItems;
