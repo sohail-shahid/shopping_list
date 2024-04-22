@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
-import 'package:shopping_list/data/available_categories.dart';
 import 'package:shopping_list/models/grocery_model.dart';
 import 'package:shopping_list/screens/new_grocery_item_screen.dart';
 
@@ -48,15 +46,9 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
       final List<GroceryModel> groceryItems = [];
       Map<String, dynamic> decodedResponse = json.decode(response.body);
       for (final entry in decodedResponse.entries) {
-        final category = availavleCategories.entries.firstWhere(
-            (category) => category.value.name == entry.value['category_name']);
-        final GroceryModel model = GroceryModel(
-          id: entry.key,
-          name: entry.value['name'],
-          quantity: entry.value['quantity'],
-          category: category.value,
-        );
-        groceryItems.add(model);
+        entry.value['id'] = entry.key;
+        final GroceryModel modelFromJson = GroceryModel.fromJson(entry.value);
+        groceryItems.add(modelFromJson);
       }
       setState(() {
         _isLoading = false;
@@ -129,7 +121,7 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
                 leading: Container(
                   height: 24,
                   width: 24,
-                  color: gorceryModel.category.color,
+                  color: gorceryModel.category!.color,
                 ),
                 trailing: Text(
                   gorceryModel.quantity.toString(),
