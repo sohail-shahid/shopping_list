@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shopping_list/data/available_categories.dart';
 import 'package:shopping_list/models/category_model.dart';
 import 'package:shopping_list/models/grocery_model.dart';
@@ -17,6 +20,7 @@ class _NewGroceryItemScreenState extends State<NewGroceryItemScreen> {
   String _quanity = '1';
   Category? _category = availavleCategories[CategoryType.vegetables];
   final _formKey = GlobalKey<FormState>();
+  bool _isSending = false;
 
   void _onResetPressed() {
     _formKey.currentState?.reset();
@@ -25,16 +29,40 @@ class _NewGroceryItemScreenState extends State<NewGroceryItemScreen> {
   void _onSaveItemPressed() {
     final isValidated = _formKey.currentState?.validate() ?? false;
     if (isValidated) {
+      setState(() {
+        _isSending = true;
+      });
       _formKey.currentState?.save();
-      print('name: $_name');
-      print('quantity: $_quanity');
-      print(_category?.type);
-      Navigator.of(context).pop(GroceryModel(
-        id: DateTime.now().toString(),
-        name: _name!,
-        quantity: int.parse(_quanity),
-        category: _category!,
-      ));
+      var url = Uri.https('shoppinglist-e0988-default-rtdb.firebaseio.com',
+          'shopping_list.json');
+      http
+          .post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(
+          {
+            'name': _name!,
+            'quantity': int.parse(_quanity),
+            'category_name': _category!.name,
+          },
+        ),
+      )
+          .then((response) {
+        print(response.body);
+        if (context.mounted) {
+          GroceryModel? model;
+          if (response.statusCode == 200) {
+            Map<String, dynamic> decodedResponse = json.decode(response.body);
+            model = GroceryModel(
+              id: decodedResponse['name']!,
+              name: _name!,
+              quantity: int.parse(_quanity),
+              category: _category!,
+            );
+          }
+          Navigator.of(context).pop(model);
+        }
+      });
     }
   }
 
@@ -132,15 +160,21 @@ class _NewGroceryItemScreenState extends State<NewGroceryItemScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: _onResetPressed,
+                    onPressed: _isSending ? null : _onResetPressed,
                     child: const Text('Reset'),
                   ),
                   const SizedBox(
                     width: 16,
                   ),
                   ElevatedButton(
-                    onPressed: _onSaveItemPressed,
-                    child: const Text('Add Item'),
+                    onPressed: _isSending ? null : _onSaveItemPressed,
+                    child: _isSending
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(),
+                          )
+                        : const Text('Add Item'),
                   ),
                 ],
               ),
