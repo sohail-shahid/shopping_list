@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
@@ -20,49 +21,34 @@ class GroceryListScreen extends StatefulWidget {
 
 class _GroceryListScreenState extends State<GroceryListScreen> {
   List<GroceryModel> _groceryModelList = [];
-  bool _isLoading = true;
-  String? _errorMessage;
+  late Future<List<GroceryModel>> _loadGroceryItemsTask;
 
-  void _loadGroceryItems() {
-    setState(() {
-      _isLoading = true;
-    });
+  Future<List<GroceryModel>> _loadGroceryItems() async {
     Uri url = Uri.https(
         'shoppinglist-e0988-default-rtdb.firebaseio.com', 'shopping_list.json');
-    get(url).then((response) {
-      print(response.body);
-      if (response.statusCode >= 400) {
-        setState(() {
-          _errorMessage = 'failed to fetch data please try later';
-        });
-        return;
-      }
-      _errorMessage = null;
-      if (response.body == 'null') {
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
+    final response = await get(url);
+    print(response.body);
+    if (response.statusCode >= 400) {
+      throw Exception('Failed to fetch grocery items, please try later');
+    }
+    if (response.body == 'null') {
+      return [];
+    }
 
-      final List<GroceryModel> groceryItems = [];
-      Map<String, dynamic> decodedResponse = json.decode(response.body);
-      for (final entry in decodedResponse.entries) {
-        final category = availavleCategories.entries.firstWhere(
-            (category) => category.value.name == entry.value['category_name']);
-        final GroceryModel model = GroceryModel(
-          id: entry.key,
-          name: entry.value['name'],
-          quantity: entry.value['quantity'],
-          category: category.value,
-        );
-        groceryItems.add(model);
-      }
-      setState(() {
-        _isLoading = false;
-        _groceryModelList = groceryItems;
-      });
-    });
+    final List<GroceryModel> groceryItems = [];
+    Map<String, dynamic> decodedResponse = json.decode(response.body);
+    for (final entry in decodedResponse.entries) {
+      final category = availavleCategories.entries.firstWhere(
+          (category) => category.value.name == entry.value['category_name']);
+      final GroceryModel model = GroceryModel(
+        id: entry.key,
+        name: entry.value['name'],
+        quantity: entry.value['quantity'],
+        category: category.value,
+      );
+      groceryItems.add(model);
+    }
+    return groceryItems;
   }
 
   void _onAddNewItemPressed(BuildContext context) {
@@ -73,77 +59,30 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
     ).then((model) {
       if (model != null) {
         setState(() {
-          _groceryModelList.add(model);
+          _loadGroceryItemsTask = _loadGroceryItems();
         });
       }
     });
   }
 
   void _onRemoveItem(GroceryModel model) async {
-    final indexOfModel = _groceryModelList.indexOf(model);
-    setState(() {
-      _groceryModelList.remove(model);
-    });
     Uri url = Uri.https('shoppinglist-e0988-default-rtdb.firebaseio.com',
         'shopping_list/${model.id}.json');
-    final response =
-        await delete(url); // deleting from backend using http package
+    final response = await delete(url);
+    setState(() {
+      _loadGroceryItemsTask = _loadGroceryItems();
+    });
     print(response.body);
-    if (response.statusCode >= 400) {
-      setState(() {
-        _groceryModelList.insert(indexOfModel, model);
-      });
-    }
   }
 
   @override
   void initState() {
     super.initState();
-    _loadGroceryItems();
+    _loadGroceryItemsTask = _loadGroceryItems();
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget content = Center(
-      child: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : const Text('No Item avilable'),
-    );
-
-    if (_groceryModelList.isNotEmpty) {
-      content = ListView.builder(
-          itemCount: _groceryModelList.length,
-          itemBuilder: (context, index) {
-            final gorceryModel = _groceryModelList[index];
-            return Dismissible(
-              key: ValueKey(gorceryModel.id),
-              onDismissed: (direction) {
-                _onRemoveItem(gorceryModel);
-              },
-              background: Container(color: Theme.of(context).colorScheme.error),
-              direction: DismissDirection.endToStart,
-              child: ListTile(
-                title: Text(gorceryModel.name),
-                leading: Container(
-                  height: 24,
-                  width: 24,
-                  color: gorceryModel.category.color,
-                ),
-                trailing: Text(
-                  gorceryModel.quantity.toString(),
-                ),
-              ),
-            );
-          });
-    }
-
-    if (_errorMessage != null) {
-      content = Center(
-        child: Text(_errorMessage!),
-      );
-    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your Groceries List'),
@@ -155,7 +94,56 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
               icon: const Icon(Icons.add))
         ],
       ),
-      body: content,
+      body: FutureBuilder(
+        future: _loadGroceryItemsTask,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                snapshot.error.toString(),
+              ),
+            );
+          }
+
+          if (snapshot.data?.isEmpty ?? true) {
+            return const Center(
+              child: Text('No Item avilable'),
+            );
+          }
+          _groceryModelList = snapshot.data ?? [];
+          return ListView.builder(
+              itemCount: _groceryModelList.length,
+              itemBuilder: (context, index) {
+                final gorceryModel = _groceryModelList[index];
+                return Dismissible(
+                  key: ValueKey(gorceryModel.id),
+                  onDismissed: (direction) {
+                    _onRemoveItem(gorceryModel);
+                  },
+                  background:
+                      Container(color: Theme.of(context).colorScheme.error),
+                  direction: DismissDirection.endToStart,
+                  child: ListTile(
+                    title: Text(gorceryModel.name),
+                    leading: Container(
+                      height: 24,
+                      width: 24,
+                      color: gorceryModel.category.color,
+                    ),
+                    trailing: Text(
+                      gorceryModel.quantity.toString(),
+                    ),
+                  ),
+                );
+              });
+        },
+      ),
     );
   }
 }
