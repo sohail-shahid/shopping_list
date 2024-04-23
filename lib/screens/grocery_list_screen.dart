@@ -1,61 +1,24 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shopping_list/models/grocery_model.dart';
+import 'package:shopping_list/providers/grocery_item_provider.dart';
 import 'package:shopping_list/screens/new_grocery_item_screen.dart';
 
-class GroceryListScreen extends StatefulWidget {
+class GroceryListScreen extends ConsumerStatefulWidget {
   const GroceryListScreen({
     super.key,
   });
 
   @override
-  State<StatefulWidget> createState() {
+  ConsumerState<ConsumerStatefulWidget> createState() {
     return _GroceryListScreenState();
   }
 }
 
-class _GroceryListScreenState extends State<GroceryListScreen> {
+class _GroceryListScreenState extends ConsumerState<GroceryListScreen> {
   List<GroceryModel> _groceryModelList = [];
   bool _isLoading = true;
   String? _errorMessage;
-
-  void _loadGroceryItems() {
-    setState(() {
-      _isLoading = true;
-    });
-    Uri url = Uri.https(
-        'shoppinglist-e0988-default-rtdb.firebaseio.com', 'shopping_list.json');
-    get(url).then((response) {
-      print(response.body);
-      if (response.statusCode >= 400) {
-        setState(() {
-          _errorMessage = 'failed to fetch data please try later';
-        });
-        return;
-      }
-      _errorMessage = null;
-      if (response.body == 'null') {
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final List<GroceryModel> groceryItems = [];
-      Map<String, dynamic> decodedResponse = json.decode(response.body);
-      for (final entry in decodedResponse.entries) {
-        entry.value['id'] = entry.key;
-        final GroceryModel modelFromJson = GroceryModel.fromJson(entry.value);
-        groceryItems.add(modelFromJson);
-      }
-      setState(() {
-        _isLoading = false;
-        _groceryModelList = groceryItems;
-      });
-    });
-  }
 
   void _onAddNewItemPressed(BuildContext context) {
     Navigator.of(context).push<GroceryModel>(
@@ -64,38 +27,24 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
       }),
     ).then((model) {
       if (model != null) {
-        setState(() {
-          _groceryModelList.add(model);
-        });
+        ref.read(gorceryItemProvider.notifier).addGroceryModel(model);
       }
     });
-  }
-
-  void _onRemoveItem(GroceryModel model) async {
-    final indexOfModel = _groceryModelList.indexOf(model);
-    setState(() {
-      _groceryModelList.remove(model);
-    });
-    Uri url = Uri.https('shoppinglist-e0988-default-rtdb.firebaseio.com',
-        'shopping_list/${model.id}.json');
-    final response =
-        await delete(url); // deleting from backend using http package
-    print(response.body);
-    if (response.statusCode >= 400) {
-      setState(() {
-        _groceryModelList.insert(indexOfModel, model);
-      });
-    }
   }
 
   @override
   void initState() {
     super.initState();
-    _loadGroceryItems();
+    ref.read(gorceryItemProvider.notifier).getGroceryItems().whenComplete(() {
+      setState(() {
+        _isLoading = false;
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    _groceryModelList = ref.watch(gorceryItemProvider);
     Widget content = Center(
       child: _isLoading
           ? const Center(
@@ -112,7 +61,9 @@ class _GroceryListScreenState extends State<GroceryListScreen> {
             return Dismissible(
               key: ValueKey(gorceryModel.id),
               onDismissed: (direction) {
-                _onRemoveItem(gorceryModel);
+                ref
+                    .read(gorceryItemProvider.notifier)
+                    .deleteGroceryItem(gorceryModel);
               },
               background: Container(color: Theme.of(context).colorScheme.error),
               direction: DismissDirection.endToStart,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shopping_list/screens/grocery_list_screen.dart';
 
 final lightColorScheme = ColorScheme.fromSeed(
@@ -25,7 +26,11 @@ final darkTheme = ThemeData.dark().copyWith(
 );
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
